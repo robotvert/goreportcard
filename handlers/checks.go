@@ -3,40 +3,11 @@ package handlers
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/exec"
-	"strings"
 	"time"
 
-	"github.com/gojp/goreportcard/check"
-	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
+	"github.com/k0kubun/pp"
+	"github.com/robotvert/goreportcard/check"
 )
-
-var (
-	mongoURL        = "mongodb://localhost:27017"
-	mongoDatabase   = "goreportcard"
-	mongoCollection = "reports"
-)
-
-func getFromCache(repo string) (checksResp, error) {
-	// try and fetch from mongo
-	session, err := mgo.Dial(mongoURL)
-	if err != nil {
-		return checksResp{}, fmt.Errorf("Failed to get mongo collection during GET: %v", err)
-	}
-	defer session.Close()
-	coll := session.DB(mongoDatabase).C(mongoCollection)
-	resp := checksResp{}
-	err = coll.Find(bson.M{"repo": repo}).One(&resp)
-	if err != nil {
-		return checksResp{}, fmt.Errorf("Failed to fetch %q from mongo: %v", repo, err)
-	}
-
-	resp.LastRefresh = resp.LastRefresh.UTC()
-
-	return resp, nil
-}
 
 type score struct {
 	Name          string              `json:"name"`
@@ -45,7 +16,7 @@ type score struct {
 	Percentage    float64             `json:"percentage"`
 }
 
-type checksResp struct {
+type ChecksResp struct {
 	Checks      []score   `json:"checks"`
 	Average     float64   `json:"average"`
 	Grade       Grade     `json:"grade"`
@@ -55,80 +26,20 @@ type checksResp struct {
 	LastRefresh time.Time `json:"last_refresh"`
 }
 
-func orgRepoNames(url string) (string, string) {
-	dir := strings.TrimSuffix(url, ".git")
-	split := strings.Split(dir, "/")
-	org := split[len(split)-2]
-	repoName := split[len(split)-1]
+func CheckPackage(path string) (ChecksResp, error) {
 
-	return org, repoName
-}
-
-func dirName(url string) string {
-	org, repoName := orgRepoNames(url)
-
-	return fmt.Sprintf("repos/src/github.com/%s/%s", org, repoName)
-}
-
-func clone(url string) error {
-	org, _ := orgRepoNames(url)
-	if err := os.Mkdir(fmt.Sprintf("repos/src/github.com/%s", org), 0755); err != nil && !os.IsExist(err) {
-		return fmt.Errorf("could not create dir: %v", err)
-	}
-	dir := dirName(url)
-	_, err := os.Stat(dir)
-	if os.IsNotExist(err) {
-		cmd := exec.Command("timeout", "120", "git", "clone", "--depth", "1", "--single-branch", url, dir)
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("could not run git clone: %v", err)
-		}
-	} else if err != nil {
-		return fmt.Errorf("could not stat dir: %v", err)
-	} else {
-		cmd := exec.Command("git", "-C", dir, "pull")
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("could not pull repo: %v", err)
-		}
-	}
-
-	return nil
-}
-
-func newChecksResp(repo string, forceRefresh bool) (checksResp, error) {
-	url := repo
-	if !strings.HasPrefix(url, "https://gojp:gojp@github.com/") {
-		url = "https://gojp:gojp@github.com/" + url
-	}
-
-	if !forceRefresh {
-		resp, err := getFromCache(repo)
-		if err != nil {
-			// just log the error and continue
-			log.Println(err)
-		} else {
-			resp.Grade = grade(resp.Average * 100) // grade is not stored for some repos, yet
-			return resp, nil
-		}
-	}
-
-	// fetch the repo and grade it
-	err := clone(url)
+	filenames, err := check.GoFiles(path)
+	pp.Println(filenames)
 	if err != nil {
-		return checksResp{}, fmt.Errorf("Could not clone repo: %v", err)
-	}
-
-	dir := dirName(url)
-	filenames, err := check.GoFiles(dir)
-	if err != nil {
-		return checksResp{}, fmt.Errorf("Could not get filenames: %v", err)
+		return ChecksResp{}, fmt.Errorf("Could not get filenames: %v", err)
 	}
 	if len(filenames) == 0 {
-		return checksResp{}, fmt.Errorf("No .go files found")
+		return ChecksResp{}, fmt.Errorf("No .go files found")
 	}
-	checks := []check.Check{check.GoFmt{Dir: dir, Filenames: filenames},
-		check.GoVet{Dir: dir, Filenames: filenames},
-		check.GoLint{Dir: dir, Filenames: filenames},
-		check.GoCyclo{Dir: dir, Filenames: filenames},
+	checks := []check.Check{check.GoFmt{Dir: path, Filenames: filenames},
+		check.GoVet{Dir: path, Filenames: filenames},
+		check.GoLint{Dir: path, Filenames: filenames},
+		check.GoCyclo{Dir: path, Filenames: filenames},
 	}
 
 	ch := make(chan score)
@@ -148,7 +59,7 @@ func newChecksResp(repo string, forceRefresh bool) (checksResp, error) {
 		}(c)
 	}
 
-	resp := checksResp{Repo: repo,
+	resp := ChecksResp{Repo: path,
 		Files:       len(filenames),
 		LastRefresh: time.Now().UTC()}
 	var avg float64

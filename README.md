@@ -1,11 +1,19 @@
-[![Go Report Card](http://goreportcard.com/badge/gojp/goreportcard)](http://goreportcard.com/report/gojp/goreportcard) [![Build Status](https://travis-ci.org/gojp/goreportcard.svg?branch=master)](https://travis-ci.org/gojp/goreportcard)
+# Go Report Card - CLI style
 
-# Go Report Card
+The upstream project is a full fledged web app but I only need to run it locally, on a given package's source code.
 
-A web application that generates a report on the quality of an open source go project. It uses several measures, including `gofmt`, `go vet`, `go lint` and `gocyclo`.
+This Quick n' Dirty™ variant keeps only the bare minimum code (no mongo caching, no http handlers etc.).
+Some changes were made accordingly, while trying to keep those minimal.
 
-#### Live demo: [http://goreportcard.com](http://goreportcard.com)
 
-Or here's the result for this repo: [http://goreportcard.com/report/gophergala/go_report](http://goreportcard.com/report/gophergala/go_report)
+## SETUP
 
-![Screenshot of Go Report Card in action](https://cloud.githubusercontent.com/assets/1121616/5891942/a2a38b8e-a4f1-11e4-82e3-29b25137f09b.png)
+To run properly several tools need to be installed, using the following commands:
+
+```
+go get -u github.com/fzipp/gocyclo
+
+go get -u golang.org/x/tools/cmd/vet
+
+go get -u github.com/golang/lint/golint
+```
