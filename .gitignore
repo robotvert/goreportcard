@@ -25,5 +25,3 @@ _testmain.go
 
 *.swp
 repos
-
-goreportcard
