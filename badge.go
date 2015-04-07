@@ -1,4 +1,4 @@
-package handlers
+package goreportcard
 
 // Grade represents a grade returned by the server, which is normally
 // somewhere between A+ (highest) and F (lowest).
