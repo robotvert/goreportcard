@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/k0kubun/pp"
 	"github.com/robotvert/goreportcard/check"
 )
 
@@ -29,7 +28,6 @@ type ChecksResp struct {
 func CheckPackage(path string) (ChecksResp, error) {
 
 	filenames, err := check.GoFiles(path)
-	pp.Println(filenames)
 	if err != nil {
 		return ChecksResp{}, fmt.Errorf("Could not get filenames: %v", err)
 	}
