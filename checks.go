@@ -12,6 +12,7 @@ type score struct {
 	Name          string              `json:"name"`
 	Description   string              `json:"description"`
 	FileSummaries []check.FileSummary `json:"file_summaries"`
+	Weight        float64             `json:"weight"`
 	Percentage    float64             `json:"percentage"`
 }
 
@@ -25,19 +26,21 @@ type ChecksResp struct {
 	LastRefresh time.Time `json:"last_refresh"`
 }
 
-func CheckPackage(path string) (ChecksResp, error) {
+func CheckPackage(dir string) (ChecksResp, error) {
 
-	filenames, err := check.GoFiles(path)
+	filenames, err := check.GoFiles(dir)
 	if err != nil {
 		return ChecksResp{}, fmt.Errorf("Could not get filenames: %v", err)
 	}
 	if len(filenames) == 0 {
 		return ChecksResp{}, fmt.Errorf("No .go files found")
 	}
-	checks := []check.Check{check.GoFmt{Dir: path, Filenames: filenames},
-		check.GoVet{Dir: path, Filenames: filenames},
-		check.GoLint{Dir: path, Filenames: filenames},
-		check.GoCyclo{Dir: path, Filenames: filenames},
+	checks := []check.Check{
+		check.GoFmt{Dir: dir, Filenames: filenames},
+		check.GoVet{Dir: dir, Filenames: filenames},
+		check.GoLint{Dir: dir, Filenames: filenames},
+		check.GoCyclo{Dir: dir, Filenames: filenames},
+		check.License{Dir: dir, Filenames: []string{}},
 	}
 
 	ch := make(chan score)
@@ -51,29 +54,30 @@ func CheckPackage(path string) (ChecksResp, error) {
 				Name:          c.Name(),
 				Description:   c.Description(),
 				FileSummaries: summaries,
+				Weight:        c.Weight(),
 				Percentage:    p,
 			}
 			ch <- s
 		}(c)
 	}
 
-	resp := ChecksResp{Repo: path,
+	resp := ChecksResp{Repo: dir,
 		Files:       len(filenames),
 		LastRefresh: time.Now().UTC()}
-	var avg float64
+	var total float64
 	var issues = make(map[string]bool)
 	for i := 0; i < len(checks); i++ {
 		s := <-ch
 		resp.Checks = append(resp.Checks, s)
-		avg += s.Percentage
+		total += s.Percentage * s.Weight
 		for _, fs := range s.FileSummaries {
 			issues[fs.Filename] = true
 		}
 	}
 
-	resp.Average = avg / float64(len(checks))
+	resp.Average = total
 	resp.Issues = len(issues)
-	resp.Grade = grade(resp.Average * 100)
+	resp.Grade = grade(total * 100)
 
 	return resp, nil
 }
